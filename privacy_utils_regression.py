@@ -161,6 +161,7 @@ def compute_all_certified_k(
         if not batch_tensored:
             batch_tensored = True
             batch = batch.to(bounded_model.device).type(bounded_model.dtype)
+            certified_k_lists = certified_k_lists.to(bounded_model.device).type(bounded_model.dtype)
 
         if not all(torch.allclose(a, b) for a, b in zip(bounded_model.param_n, param_n_check)):
             check_flag = True
@@ -168,16 +169,24 @@ def compute_all_certified_k(
         worst_case, best_case = bounded_model.bound_forward(batch, batch)
         nominal = bounded_model.forward(batch)
 
+        # worst_case/best_case
+        worst_case = torch.clamp(worst_case, min=min_bound, max=max_bound)
+        best_case = torch.clamp(best_case, min=min_bound, max=max_bound)
+        # print(worst_case - best_case)
+
         certified_k_lists = torch.cat((certified_k_lists, torch.max(abs(worst_case - nominal), abs(best_case - nominal))), axis=1)
 
+    certified_k_lists = torch.cat((certified_k_lists, torch.full_like(nominal, max_bound - min_bound)), axis=1)
+        
+    #     l1 = torch.max(abs(worst_case - nominal), abs(best_case - nominal))
+    #     l1_clamped = torch.clamp(l1, min=min_bound, max=max_bound)
+    #     certified_k_lists = torch.cat((certified_k_lists, l1_clamped), axis=1)
+    # print( torch.full_like(l1, 10))
+    # certified_k_lists = torch.cat((certified_k_lists, torch.full_like(l1, 10)), axis=1)
 
-    certified_k_lists = torch.cat((certified_k_lists, torch.max(abs(max_bound - nominal), abs(min_bound - nominal))), axis=1)
-
-        # certified_k_lists[i].append(torch.max(abs(max_bound - nominal), abs(min_bound - nominal)), axis=1)
 
     if check_flag:
         LOGGER.warning("Nominal parameters don't match for all k_private: check that you are seeding AGT correctly")
-
     return certified_k_lists
 
 def compute_smooth_sensitivity(
@@ -196,43 +205,28 @@ def compute_smooth_sensitivity(
     Returns:
         torch.Tensor: Smooth sensitivity values for each point (1D tensor).
     """
-    # print(certified_matrix)
-    # print(certified_matrix.shape[1])
+    
     assert certified_matrix.shape[1] == len(k_values) + 1, "Mismatch in k_values and matrix columns"
-
-    # new_k = np.array(k_values) + 1
-
-    # new_k = np.concatenate(([1], new_k))
-
-    # exp_weights = np.exp(-beta * (np.array(k_values) + 1))     # shape: [num_k_values]
-    # weighted_matrix = certified_matrix * exp_weights           # element-wise multiplication
-    # smooth_sensitivities = weighted_matrix.max(axis=1)         # max per row
-    # print(smooth_sensitivities)
-    # print(smooth_sensitivities.shape)
-
-
-    # return torch.from_numpy(smooth_sensitivities)
-
-    # print(certified_matrix)
-    # print(beta)
 
     k_values = torch.tensor(k_values)  # make sure k_values is a 1D tensor
     beta = torch.tensor(beta)          # beta should be a scalar tensor or float
     certified_matrix = certified_matrix.float()  # ensure same dtype if needed
 
-    # Compute new_k (if you still need it)
+    # Compute new_k
     new_k = k_values + 1
     new_k = torch.cat([torch.tensor([1]), new_k])
 
     # Compute exp_weights using PyTorch
-    exp_weights = torch.exp(-beta * new_k)  # shape: [num_k_values]
+    exp_weights = torch.exp(-beta * new_k).to(certified_matrix.device)  # shape: [num_k_values]
     
     # Reshape weights for broadcasting: [1, num_k_values]
     exp_weights = exp_weights.unsqueeze(0)
 
+    # print(certified_matrix.device)
+    # print(exp_weights.device)
     # Perform element-wise multiplication
-    weighted_matrix = certified_matrix * exp_weights  # broadcasting happens here
-    print(weighted_matrix)
+    weighted_matrix = certified_matrix * exp_weights
+
     # Get max per row (dim=1)
     smooth_sensitivities = torch.max(weighted_matrix, dim=1).values
     return smooth_sensitivities
