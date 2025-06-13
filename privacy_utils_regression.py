@@ -60,15 +60,6 @@ def noisy_test_mse(
     else:
         noise_distribution = torch.distributions.Cauchy(0, noise_level)
 
-    # # nominal, lower and upper bounds for the forward pass
-    # logit_n = model.forward(batch).squeeze()
-
-    # # transform 2-logit models to a single output
-    # if logit_n.shape[-1] == 2:
-    #     logit_n = logit_n[:, 1] - logit_n[:, 0]
-    # if logit_n.dim() > 1:
-    #     raise NotImplementedError("Noisy accuracy is not supported for multi-class classification.")
-
     # nominal, lower and upper bounds for the forward pass
     y_n = model.forward(batch).squeeze()
 
@@ -77,13 +68,6 @@ def noisy_test_mse(
         y_n = y_n[:, 1] - y_n[:, 0]
     if y_n.dim() > 1:
         raise NotImplementedError("Noisy accuracy is not supported for multi-class classification.")
-
-    # # apply noise + threshold dp mechanisim
-    # y_n = (logit_n > 0).to(torch.float32).squeeze()
-    # noise = noise_distribution.sample().to(y_n.device).squeeze()
-    # assert noise.shape == y_n.shape
-    # y_n = (y_n + noise) > 0.5
-    # accuracy = (y_n == labels).float().mean().item()
 
     # apply noise + threshold dp mechanisim
     noise = noise_distribution.sample().to(y_n.device).squeeze()
@@ -172,17 +156,10 @@ def compute_all_certified_k(
         # worst_case/best_case
         worst_case = torch.clamp(worst_case, min=min_bound, max=max_bound)
         best_case = torch.clamp(best_case, min=min_bound, max=max_bound)
-        # print(worst_case - best_case)
 
         certified_k_lists = torch.cat((certified_k_lists, torch.max(abs(worst_case - nominal), abs(best_case - nominal))), axis=1)
 
     certified_k_lists = torch.cat((certified_k_lists, torch.full_like(nominal, max_bound - min_bound)), axis=1)
-        
-    #     l1 = torch.max(abs(worst_case - nominal), abs(best_case - nominal))
-    #     l1_clamped = torch.clamp(l1, min=min_bound, max=max_bound)
-    #     certified_k_lists = torch.cat((certified_k_lists, l1_clamped), axis=1)
-    # print( torch.full_like(l1, 10))
-    # certified_k_lists = torch.cat((certified_k_lists, torch.full_like(l1, 10)), axis=1)
 
 
     if check_flag:
@@ -222,8 +199,7 @@ def compute_smooth_sensitivity(
     # Reshape weights for broadcasting: [1, num_k_values]
     exp_weights = exp_weights.unsqueeze(0)
 
-    # print(certified_matrix.device)
-    # print(exp_weights.device)
+
     # Perform element-wise multiplication
     weighted_matrix = certified_matrix * exp_weights
 
