@@ -21,7 +21,7 @@ To train models, run the corresponding `*_generate.ipynb` notebook for your task
 3. Adjust any parameters as needed.
 4. Run all cells to:
    - Train the model.
-   - Save the trained model parameters to disk (e.g., `.pkl`, `.joblib`, or `.pt` files).
+   - Save the trained model parameters to disk.
 
 ---
 
